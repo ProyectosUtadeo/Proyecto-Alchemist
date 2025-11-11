@@ -24,6 +24,15 @@ func (r *MaterialRepository) FindById(id int) (*models.Material, error) {
 	return &m, err
 }
 
+func (r *MaterialRepository) FindLowStock(threshold float64) ([]*models.Material, error) {
+	var list []*models.Material
+	err := r.db.Where("stock <= ?", threshold).Order("stock ASC").Find(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 func (r *MaterialRepository) FindByIDs(ids []int) ([]*models.Material, error) {
 	var list []*models.Material
 	if len(ids) == 0 {
