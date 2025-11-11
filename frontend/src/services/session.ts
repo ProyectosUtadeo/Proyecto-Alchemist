@@ -1,11 +1,23 @@
+export const AUTH_CHANGED_EVENT = "auth-token-changed";
+
+function notifyAuthChange() {
+  try {
+    window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
+  } catch {
+    // window might not be available (SSR/tests)
+  }
+}
+
 export function getToken() {
   return localStorage.getItem("jwt") || "";
 }
 export function setToken(t: string) {
   localStorage.setItem("jwt", t);
+  notifyAuthChange();
 }
 export function clearToken() {
   localStorage.removeItem("jwt");
+  notifyAuthChange();
 }
 export function decodeRole(): "ALCHEMIST" | "SUPERVISOR" | null {
   const t = getToken();

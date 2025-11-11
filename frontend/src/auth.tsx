@@ -1,5 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { clearToken, decodeRole, getToken } from "./services/session";
+import {
+  AUTH_CHANGED_EVENT,
+  clearToken,
+  decodeRole,
+  getToken,
+} from "./services/session";
 
 // 🔧 Tipo extendido de usuario
 export type User = {
@@ -19,14 +24,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User>(null);
 
   useEffect(() => {
-    const token = getToken();
-    if (token) {
-      const role = decodeRole();
-      // Si luego incluyes email o id en el JWT, los puedes decodificar aquí también
-      if (role) {
-        setUser({ role, token });
+    const syncUser = () => {
+      const token = getToken();
+      if (token) {
+        const role = decodeRole();
+        if (role) {
+          setUser({ role, token });
+          return;
+        }
       }
-    }
+      setUser(null);
+    };
+
+    syncUser();
+
+    const handler = () => syncUser();
+    window.addEventListener(AUTH_CHANGED_EVENT, handler);
+    window.addEventListener("storage", handler);
+
+    return () => {
+      window.removeEventListener(AUTH_CHANGED_EVENT, handler);
+      window.removeEventListener("storage", handler);
+    };
   }, []);
 
   const logout = () => {

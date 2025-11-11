@@ -8,7 +8,7 @@ type MaterialRequestDto struct {
 }
 
 type MaterialResponseDto struct {
-	ID     int     `json:"material_id"`
+	ID     int     `json:"id"`
 	Nombre string  `json:"name"`
 	Unidad string  `json:"unit"`
 	Costo  float64 `json:"cost"`

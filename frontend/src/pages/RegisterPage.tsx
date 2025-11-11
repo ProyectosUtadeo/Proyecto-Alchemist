@@ -2,8 +2,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { register } from "../services/api";
-// Si tienes helpers de sesión, descomenta esto y usa setToken abajo
-// import { setToken } from "../services/session";
+import { setToken } from "../services/session";
 
 type Role = "ALCHEMIST" | "SUPERVISOR";
 
@@ -46,7 +45,7 @@ export default function RegisterPage() {
 
       // Guarda el token y navega
       // Preferido si tienes helpers de sesión:
-      // setToken(res.token);
+      setToken(res.token);
       localStorage.setItem("jwt", res.token);
 
       nav("/");
