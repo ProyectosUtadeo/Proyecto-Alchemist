@@ -17,12 +17,17 @@ import (
 )
 
 const (
-	auditEntityTransmutation = "transmutation"
-	defaultComplexityKey     = "LOW"
-	defaultRiskKey           = "GUARDED"
-	defaultCatalystQuality   = 3
-	minCatalystQuality       = 1
-	maxCatalystQuality       = 5
+	auditEntityTransmutation           = "transmutation"
+	defaultComplexityKey               = "LOW"
+	defaultRiskKey                     = "GUARDED"
+	defaultCatalystQuality             = 3
+	minCatalystQuality                 = 1
+	maxCatalystQuality                 = 5
+	transmutationStatusPendingApproval = "PENDING_APPROVAL"
+	transmutationStatusInProgress      = "IN_PROGRESS"
+	transmutationStatusCompleted       = "COMPLETED"
+	transmutationStatusFailed          = "FAILED"
+	transmutationStatusCancelled       = "CANCELLED"
 )
 
 var (
@@ -34,10 +39,11 @@ var (
 	errInvalidMaterialQuantity = errors.New("material quantity must be positive")
 
 	allowedTransmutationStatuses = map[string]bool{
-		"IN_PROGRESS": true,
-		"COMPLETED":   true,
-		"FAILED":      true,
-		"CANCELLED":   true,
+		transmutationStatusPendingApproval: true,
+		transmutationStatusInProgress:      true,
+		transmutationStatusCompleted:       true,
+		transmutationStatusFailed:          true,
+		transmutationStatusCancelled:       true,
 	}
 
 	complexityWeights = map[string]float64{
@@ -209,13 +215,19 @@ func (s *Server) startTransmutation(alchemistID int, req *api.TransmutationReque
 	if alch == nil {
 		return nil, errAlchemistNotFound
 	}
-	if _, ok := s.taskQueue.tasks[int(alch.ID)]; ok {
+	active, err := s.TransmutationRepository.HasActiveForAlchemist(alch.ID, transmutationStatusPendingApproval, transmutationStatusInProgress)
+	if err != nil {
+		return nil, err
+	}
+	if active {
 		return nil, errTransmutationInProgress
 	}
+
 	desc := strings.TrimSpace(req.Description)
 	if desc == "" {
 		desc = "Generic transmutation"
 	}
+
 	simInput := &api.TransmutationSimulationRequestDto{
 		Description:     desc,
 		Complexity:      req.Complexity,
@@ -223,6 +235,7 @@ func (s *Server) startTransmutation(alchemistID int, req *api.TransmutationReque
 		CatalystQuality: req.CatalystQuality,
 		Materials:       req.Materials,
 	}
+
 	simulation, err := s.calculateTransmutationSimulation(simInput)
 	if err != nil {
 		return nil, err
@@ -231,9 +244,10 @@ func (s *Server) startTransmutation(alchemistID int, req *api.TransmutationReque
 	if durationSeconds <= 0 {
 		durationSeconds = int(s.transmutationDuration(desc).Seconds())
 	}
+
 	t := &models.Transmutation{
 		Description:            desc,
-		Status:                 "IN_PROGRESS",
+		Status:                 transmutationStatusPendingApproval,
 		AlchemistID:            alch.ID,
 		Alchemist:              alch,
 		EstimatedCost:          simulation.EstimatedCost,
@@ -244,34 +258,56 @@ func (s *Server) startTransmutation(alchemistID int, req *api.TransmutationReque
 		return nil, err
 	}
 	saved.Alchemist = alch
-	if err := s.createTransmutationAudit("TRANSMUTATION_STARTED", saved.ID, fmt.Sprintf("Transmutación #%d iniciada por %s", saved.ID, alch.Name)); err != nil {
+	if err := s.createTransmutationAudit("TRANSMUTATION_REQUESTED", saved.ID, fmt.Sprintf("Transmutación #%d solicitada por %s", saved.ID, alch.Name)); err != nil {
 		_ = s.TransmutationRepository.Delete(saved)
 		return nil, err
 	}
 
-	// 🔔 WS: notificar inicio
+	// 🔔 WS: notificar nueva transmutación en espera
 	if s.WsHub != nil {
 		_ = s.notify("transmutation:started", saved.ToResponseDto(true))
 	}
 
-	duration := time.Duration(durationSeconds) * time.Second
-	task := func(_ *models.Kill) error {
-		if err := s.TransmutationRepository.UpdateStatus(saved.ID, "COMPLETED"); err != nil {
+	return saved, nil
+}
+
+func (s *Server) scheduleTransmutation(t *models.Transmutation) error {
+	alch := t.Alchemist
+	if alch == nil {
+		found, err := s.AlchemistRepository.FindById(int(t.AlchemistID))
+		if err != nil {
 			return err
 		}
-		if err := s.createTransmutationAudit("TRANSMUTATION_COMPLETED", saved.ID, fmt.Sprintf("Transmutación #%d completada para %s", saved.ID, alch.Name)); err != nil {
+		if found == nil {
+			return fmt.Errorf("alchemist %d not found", t.AlchemistID)
+		}
+		alch = found
+		t.Alchemist = alch
+	}
+
+	durationSeconds := t.EstimatedDurationTotal
+	if durationSeconds <= 0 {
+		durationSeconds = int(s.transmutationDuration(t.Description).Seconds())
+		t.EstimatedDurationTotal = durationSeconds
+	}
+	duration := time.Duration(durationSeconds) * time.Second
+
+	s.taskQueue.StartTask(int(t.AlchemistID), duration, func(_ *models.Kill) error {
+		if err := s.TransmutationRepository.UpdateStatus(t.ID, transmutationStatusCompleted); err != nil {
 			return err
+		}
+		if err := s.createTransmutationAudit("TRANSMUTATION_COMPLETED", t.ID, fmt.Sprintf("Transmutación #%d completada para %s", t.ID, alch.Name)); err != nil {
 		}
 		// 🔔 WS: notificar completada (cargar DTO actualizado para enviar con alchemist)
 		if s.WsHub != nil {
-			if updated, e := s.TransmutationRepository.FindById(int(saved.ID)); e == nil && updated != nil {
+			if updated, e := s.TransmutationRepository.FindById(int(t.ID)); e == nil && updated != nil {
 				_ = s.notify("transmutation:completed", updated.ToResponseDto(true))
 			}
 		}
 		return nil
-	}
-	s.taskQueue.StartTask(int(alch.ID), duration, task, nil)
-	return saved, nil
+	}, nil)
+
+	return nil
 }
 
 func (s *Server) calculateTransmutationSimulation(req *api.TransmutationSimulationRequestDto) (*api.TransmutationSimulationResponseDto, error) {
@@ -606,7 +642,57 @@ func (s *Server) handleUpdateTransmutationStatus(w http.ResponseWriter, r *http.
 		s.logger.Info(http.StatusOK, r.URL.Path, start)
 		return
 	}
-	if current == "IN_PROGRESS" && status != "IN_PROGRESS" {
+	if status == transmutationStatusInProgress {
+		if current != transmutationStatusPendingApproval {
+			s.HandleError(w, http.StatusBadRequest, r.URL.Path, fmt.Errorf("only pending transmutations can be approved"))
+			return
+		}
+		if err := s.TransmutationRepository.UpdateStatus(t.ID, status); err != nil {
+			s.HandleError(w, http.StatusInternalServerError, r.URL.Path, err)
+			return
+		}
+		t.Status = status
+
+		alch := t.Alchemist
+		if alch == nil {
+			var fetchErr error
+			alch, fetchErr = s.AlchemistRepository.FindById(int(t.AlchemistID))
+			if fetchErr != nil {
+				s.HandleError(w, http.StatusInternalServerError, r.URL.Path, fetchErr)
+				return
+			}
+			if alch != nil {
+				t.Alchemist = alch
+			}
+		}
+		alchName := fmt.Sprintf("#%d", t.AlchemistID)
+		if alch != nil {
+			alchName = alch.Name
+		}
+		if err := s.createTransmutationAudit("TRANSMUTATION_APPROVED", t.ID, fmt.Sprintf("Transmutación #%d aprobada para %s", t.ID, alchName)); err != nil {
+			s.HandleError(w, http.StatusInternalServerError, r.URL.Path, err)
+			return
+		}
+		if err := s.scheduleTransmutation(t); err != nil {
+			_ = s.TransmutationRepository.UpdateStatus(t.ID, transmutationStatusPendingApproval)
+			t.Status = transmutationStatusPendingApproval
+			s.HandleError(w, http.StatusInternalServerError, r.URL.Path, err)
+			return
+		}
+
+		if s.WsHub != nil {
+			_ = s.notify("transmutation:updated", t.ToResponseDto(true))
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(t.ToResponseDto(true)); err != nil {
+			s.HandleError(w, http.StatusInternalServerError, r.URL.Path, err)
+			return
+		}
+		s.logger.Info(http.StatusOK, r.URL.Path, start)
+		return
+	}
+	if current == transmutationStatusInProgress && status != transmutationStatusInProgress {
 		s.taskQueue.CancelTask(int(t.AlchemistID))
 	}
 	if err := s.TransmutationRepository.UpdateStatus(t.ID, status); err != nil {
@@ -649,18 +735,18 @@ func (s *Server) handleCancelTransmutation(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	status := strings.ToUpper(strings.TrimSpace(t.Status))
-	if status == "COMPLETED" || status == "FAILED" {
+	if status == transmutationStatusCompleted || status == transmutationStatusFailed {
 		s.HandleError(w, http.StatusConflict, r.URL.Path, fmt.Errorf("transmutation %d can no longer be cancelled", id))
 		return
 	}
-	if status == "IN_PROGRESS" {
+	if status == transmutationStatusInProgress {
 		s.taskQueue.CancelTask(int(t.AlchemistID))
 	}
-	if err := s.TransmutationRepository.UpdateStatus(t.ID, "CANCELLED"); err != nil {
+	if err := s.TransmutationRepository.UpdateStatus(t.ID, transmutationStatusCancelled); err != nil {
 		s.HandleError(w, http.StatusInternalServerError, r.URL.Path, err)
 		return
 	}
-	t.Status = "CANCELLED"
+	t.Status = transmutationStatusCancelled
 	if err := s.createTransmutationAudit("TRANSMUTATION_CANCELLED", t.ID, fmt.Sprintf("Transmutación #%d cancelada", t.ID)); err != nil {
 		s.HandleError(w, http.StatusInternalServerError, r.URL.Path, err)
 		return

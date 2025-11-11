@@ -35,6 +35,19 @@ func (r *TransmutationRepository) FindById(id int) (*models.Transmutation, error
 	}
 	return &t, nil
 }
+func (r *TransmutationRepository) HasActiveForAlchemist(alchemistID uint, statuses ...string) (bool, error) {
+	if len(statuses) == 0 {
+		statuses = []string{"IN_PROGRESS"}
+	}
+	var count int64
+	err := r.db.Model(&models.Transmutation{}).
+		Where("alchemist_id = ? AND status IN ?", alchemistID, statuses).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
 
 func (r *TransmutationRepository) Save(data *models.Transmutation) (*models.Transmutation, error) {
 	err := r.db.Save(data).Error

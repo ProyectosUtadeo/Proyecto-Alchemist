@@ -141,7 +141,7 @@ export default function TransmutationsPage() {
         catalystQuality: catalyst,
         materials: form.materials,
       });
-      setSuccessMessage("Transmutation queued successfully.");
+      setSuccessMessage("Transmutation sent for supervisor approval.");
       setForm((prev) => ({
         ...prev,
         description: "",
