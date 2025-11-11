@@ -1,0 +1,7 @@
+/* src/index.css */
+* { box-sizing: border-box; }
+body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+table { width: 100%; }
+th, td { border-bottom: 1px solid #eee; }
+input, textarea, select, button { padding: 6px 8px; }
+button { cursor: pointer; }
