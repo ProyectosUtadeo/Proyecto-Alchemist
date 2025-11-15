@@ -23,21 +23,15 @@ type Server struct {
 	Config  *config.Config
 	Handler http.Handler
 
-	// Legacy repositories (del proyecto base)
-	PeopleRepository repository.Repository[models.Person]
-	KillRepository   repository.Repository[models.Kill]
-
 	// Repositorios del proyecto Amestris
 	AlchemistRepository     *repository.AlchemistRepository
 	MaterialRepository      *repository.MaterialRepository
 	MissionRepository       *repository.MissionRepository
 	TransmutationRepository *repository.TransmutationRepository
 	AuditRepository         *repository.AuditRepository
+	UserRepository          *repository.UserRepository
 
-	// 👇👇👇 NUEVO
-	UserRepository *repository.UserRepository
-
-	// 👇👇👇 NUEVO: Hub de WebSocket para notificaciones en tiempo real
+	// Hub de WebSocket para notificaciones en tiempo real
 	WsHub *Hub
 
 	logger    *logger.Logger
@@ -137,11 +131,6 @@ func (s *Server) initDB() {
 
 	fmt.Println("📦 Aplicando migraciones...")
 	if err := s.DB.AutoMigrate(
-		// Legacy
-		&models.Person{},
-		&models.Kill{},
-
-		// Amestris
 		&models.Alchemist{},
 		&models.Material{},
 		&models.Mission{},
@@ -153,11 +142,6 @@ func (s *Server) initDB() {
 	}
 
 	fmt.Println("🔗 Inicializando repositorios...")
-	// Legacy
-	s.KillRepository = repository.NewKillRepository(s.DB)
-	s.PeopleRepository = repository.NewPeopleRepository(s.DB)
-
-	// Amestris
 	s.AlchemistRepository = repository.NewAlchemistRepository(s.DB)
 	s.MaterialRepository = repository.NewMaterialRepository(s.DB)
 	s.MissionRepository = repository.NewMissionRepository(s.DB)

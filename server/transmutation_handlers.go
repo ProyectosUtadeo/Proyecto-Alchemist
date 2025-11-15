@@ -292,7 +292,7 @@ func (s *Server) scheduleTransmutation(t *models.Transmutation) error {
 	}
 	duration := time.Duration(durationSeconds) * time.Second
 
-	s.taskQueue.StartTask(int(t.AlchemistID), duration, func(_ *models.Kill) error {
+	s.taskQueue.StartTask(int(t.AlchemistID), duration, func() error {
 		if err := s.TransmutationRepository.UpdateStatus(t.ID, transmutationStatusCompleted); err != nil {
 			return err
 		}
@@ -305,7 +305,7 @@ func (s *Server) scheduleTransmutation(t *models.Transmutation) error {
 			}
 		}
 		return nil
-	}, nil)
+	})
 
 	return nil
 }

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"backend-avanzada/models"
 	"context"
 	"fmt"
 	"sync"
@@ -19,7 +18,7 @@ func NewTaskQueue() *TaskQueue {
 	}
 }
 
-func (tq *TaskQueue) StartTask(id int, duration time.Duration, task func(k *models.Kill) error, k *models.Kill) {
+func (tq *TaskQueue) StartTask(id int, duration time.Duration, task func() error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	tq.mu.Lock()
@@ -38,7 +37,7 @@ func (tq *TaskQueue) StartTask(id int, duration time.Duration, task func(k *mode
 			fmt.Printf("La tarea con ID %d fue cancelada.\n", id)
 		case <-time.After(duration):
 			fmt.Printf("Iniciando tarea asíncrona con id %d...\n", id)
-			err := task(k)
+			err := task()
 			if err != nil {
 				fmt.Printf("Error en tarea asíncrona: %v\n", err)
 			}
