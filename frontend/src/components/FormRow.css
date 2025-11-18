@@ -1,0 +1,22 @@
+.form-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 160px) 1fr;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+.form-row__label {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.form-row__control > * {
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}

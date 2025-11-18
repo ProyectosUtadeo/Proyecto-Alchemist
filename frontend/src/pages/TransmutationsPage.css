@@ -1,0 +1,70 @@
+/* src/pages/TransmutationsPage.css */
+.transmutations-planner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.transmutations-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+.transmutations-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
+.transmutations-materials {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.transmutations-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+.transmutations-summary {
+  display: grid;
+  gap: var(--spacing-sm);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.transmutations-breakdown {
+  margin-top: var(--spacing-md);
+}
+
+.transmutations-empty {
+  color: var(--text-secondary);
+}
+
+.transmutations-taglist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.transmutations-taglist li {
+  margin-left: 16px;
+}
+.transmutations-result {
+  border-radius: var(--radius-medium);
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.transmutations-result ul {
+  margin: 0;
+  padding-left: 18px;
+}
